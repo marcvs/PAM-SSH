@@ -1,0 +1,8 @@
+*.o
+*.so*
+test*
+pam_test*
+pam_test/*
+src*/
+stacks*/
+*org*
