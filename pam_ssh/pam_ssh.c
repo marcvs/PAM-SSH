@@ -94,12 +94,39 @@ PAM_EXTERN int pam_sm_setcred( pam_handle_t *pamh, int flags, int argc, const ch
 // this function is ripped from pam_unix/support.c, it lets us do IO via PAM
 int converse( pam_handle_t *pamh, int nargs, struct pam_message **message, struct pam_response **response ) {
     int retval ;
+    /**struct pam_response *mresp;*/
     struct pam_conv *conv ;
+    int n_responses = 1;
+    int i=0;
+    sys_log(LOG_DEBUG, "converse 1");
+    sys_log(LOG_DEBUG, "pam_message: >>%s<<", message[0]->msg);
+    /**if ((mresp = calloc(n_responses, sizeof *mresp)) == NULL)*/
+    /**    return (PAM_BUF_ERR);*/
 
+    sys_log(LOG_DEBUG, "converse 1.1");
     retval = pam_get_item( pamh, PAM_CONV, (const void **) &conv ) ; 
+    sys_log(LOG_DEBUG, "converse 2");
+
     if( retval==PAM_SUCCESS ) {
+        sys_log(LOG_DEBUG, "converse 3");
+        sys_log(LOG_DEBUG, "converse: nargs: %d", nargs);
         retval = conv->conv( nargs, (const struct pam_message **) message, response, conv->appdata_ptr ) ;
+        /**mresp[0].resp = strdup("marcus was here");*/
+        /**mresp[0].resp_retcode = 0;*/
+        /***response = mresp;*/
+
+        /**sys_log(LOG_DEBUG, "converse: response: %s", (*response)->resp);*/
+        /**sys_log(LOG_DEBUG, "converse: response: %s", *response[0]->resp);*/
+        sys_log(LOG_DEBUG, "converse: response[0]:");
+        sys_log(LOG_DEBUG, "converse: response: %s", response[0]->resp);
+        for (i = 0; i <= 12; i++){
+            sys_log(LOG_DEBUG, "converse: response:   %d:  input: %d - %c", i, response[0]->resp[i], (*response)->resp[i]);
+        }
+
+        sys_log(LOG_DEBUG, "converse: retval  : %d", retval);
+
     }
+    sys_log(LOG_DEBUG, "converse 4");
 
     return retval ;
 }
@@ -122,20 +149,38 @@ static long http_auth(const char* input, const char* host_endpoint, char** respo
     char* resp = NULL;
     long http_code = 404;
     int cnt;
+    int i=0;
+    char buffer[1024];
+    sys_log(LOG_DEBUG, "http_auth: start");
     curl = curl_easy_init() ;
     if (curl) {
         int len = strlen(AUTH_BEARER) + strlen(input) + 1; 
+        sys_log(LOG_DEBUG, "http_auth: len: %d", len);
         char auth_bearer[len] ;
         //strcpy(auth_bearer, AUTH_BEARER);
         //strcat(auth_bearer, input) ;
         cnt = snprintf(auth_bearer, len, "%s%s", AUTH_BEARER, input );
-        if (cnt < 1) return http_code;
+        if (cnt < 1) {
+            return http_code;
+        }
+        cnt = snprintf(buffer, strlen(input), "%s", input );
+        if (cnt < 1) {
+            return http_code;
+        }
+        sys_log(LOG_DEBUG, "http_auth: AUTH_BEARER: >>%s<<", AUTH_BEARER);
+        sys_log(LOG_DEBUG, "http_auth: len(input): >>%d<<", sizeof(input));
+        sys_log(LOG_DEBUG, "http_auth: input: >>%s<<", buffer);
+        sys_log(LOG_DEBUG, "http_auth: auth_bearer: >>%s<<", auth_bearer);
+        for (i = 0; i <= 12; i++){
+            sys_log(LOG_DEBUG, "http_auth:  %d:  input: %d - %c", i, input[i], input[i]);
+        }
+
         headers = curl_slist_append( headers, auth_bearer);
         curl_easy_setopt(curl, CURLOPT_URL, host_endpoint) ;
         curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
         curl_easy_setopt(curl, CURLOPT_VERBOSE, 1L );
         curl_easy_setopt(curl, CURLOPT_FAILONERROR, true);
-        curl_easy_setopt(curl, CURLOPT_DEBUGFUNCTION, my_trace);
+        /**curl_easy_setopt(curl, CURLOPT_DEBUGFUNCTION, my_trace);*/
         curl_easy_setopt(curl, CURLOPT_ERRORBUFFER, error);
         curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, callback_func);
         curl_easy_setopt(curl, CURLOPT_WRITEDATA, &resp);
@@ -144,34 +189,41 @@ static long http_auth(const char* input, const char* host_endpoint, char** respo
         curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &http_code);
         curl_easy_cleanup(curl);
     }
-//    sys_log(LOG_DEBUG, "response: %s", resp);
-//    sys_log(LOG_DEBUG, "error: %s", error);
+    /**sys_log(LOG_DEBUG, "response: %s", resp);*/
+    /**sys_log(LOG_DEBUG, "error: %s", error);*/
     if (resp){
             if (*response){            
             if (strlen(resp) != strlen(*response))
                 *response = realloc(*response, sizeof(char) * (strlen(resp) + 1));
             cnt = snprintf(*response, strlen(resp) + 1, "%s", resp);
-            if (cnt < 1) 
+            if (cnt < 1) {
+                sys_log(LOG_ERR, "http_auth: error: cnt <1  %d", http_code);
                 return http_code;
+            }
         } else
             *response = strdup(resp);
     }
     if (error){
+        sys_log(LOG_ERR, "http_auth: error: %d", http_code);
         if (*err){
             if (CURL_ERROR_SIZE != strlen(*err))
                 *err = realloc(*err, sizeof(char) * (CURL_ERROR_SIZE + 1));                
             cnt = snprintf(*err, CURL_ERROR_SIZE + 1, "%s", error);
-            if (cnt < 1)
+            if (cnt < 1) {
+                sys_log(LOG_ERR, "http_auth: error: cnt <1 (2/2) %d", http_code);
                 return http_code;
+            }
         } else
             *err = strdup(error);
     }
-    sys_log(LOG_DEBUG, "response: %s", *response);
-    sys_log(LOG_DEBUG, "err: %s", *err);
+    sys_log(LOG_DEBUG, "http_auth: response: %s", *response);
+    sys_log(LOG_DEBUG, "http_auth: err: %s", *err);
     if (headers)
         free(headers);
     if (resp)
         free(resp);
+
+    sys_log(LOG_DEBUG, "http_auth: returning %d", http_code);
     return http_code;
 }
 
@@ -200,7 +252,8 @@ PAM_EXTERN int pam_sm_authenticate( pam_handle_t *pamh, int flags, int argc, con
     char* response = NULL;//(char*)calloc(10, sizeof(char));
 
     
-    //sys_log(LOG_DEBUG, "argc: %d", argc );
+    sys_log(LOG_DEBUG, "argc: %d", argc );
+    sys_log(LOG_DEBUG, "argv[0]: %s", argv[0]);
 
     // No config file provided
     if (argc != 1)
@@ -224,26 +277,31 @@ PAM_EXTERN int pam_sm_authenticate( pam_handle_t *pamh, int flags, int argc, con
     if (!mapped_users) {
         goto error;
     }
+    sys_log(LOG_DEBUG, "mapped_users: %s", mapped_users);
     if ((retval = pam_get_item( pamh, PAM_USER, (const void **)& provided_username)) != PAM_SUCCESS) {
         sys_log(LOG_ERR, "Error: %s", pam_strerror( pamh, retval ) );
         goto error;        
     }
+    sys_log(LOG_DEBUG, "PAM_USER: %d", PAM_USER);
 
     if (!provided_username)
         goto error;
     username = strdup(provided_username);
     user_location = strdup(provided_username);
 
+    sys_log(LOG_DEBUG, "mar: username: %s", username);    
+    /**sys_log(LOG_DEBUG, "mar: user_location: %s", user_location);*/
     if (traverse_username(provided_username, &username, &user_location)){
-        sys_log(LOG_DEBUG, "username: %s", username);    
-        sys_log(LOG_DEBUG, "user_location: %s", user_location);
+        /**sys_log(LOG_DEBUG, "Traverse_username worked");*/
+        /**sys_log(LOG_DEBUG, "username: %s", username);    */
+        /**sys_log(LOG_DEBUG, "user_location: %s", user_location);*/
         if (user_location){            
             // PAM has to fetch URL from NSS config...
             user_endpoint = map_get_url_for_location(user_location);            
         } else    {
             user_endpoint = map_get_mapped_user(username, USED_IN_PAM);
         }
-        //sys_log(LOG_DEBUG, "user_endpoint: %s", user_endpoint);
+        sys_log(LOG_DEBUG, "user_endpoint: %s", user_endpoint);
         if (!user_endpoint) 
             goto error;
         user_url = strdup(user_endpoint);
@@ -260,8 +318,10 @@ PAM_EXTERN int pam_sm_authenticate( pam_handle_t *pamh, int flags, int argc, con
            free(user_location);
     if (!mapped_item)
            goto error;
+    /**sys_log(LOG_DEBUG, "mapped_users: %s", mapped_users]);*/
        
     host_endpoint = strdup(mapped_item->url);
+    sys_log(LOG_DEBUG, "host_endpoint: %s", host_endpoint);
     if (!host_endpoint)
         goto error;        
     host_url = strdup(mapped_item->url);
@@ -274,44 +334,78 @@ PAM_EXTERN int pam_sm_authenticate( pam_handle_t *pamh, int flags, int argc, con
     }
     if (!host_url)
         goto error;
+    /**sys_log(LOG_DEBUG, "host_url: %s", host_url);*/
     if (strcmp(user_url, host_url) != 0) 
         goto error;
-    sys_log(LOG_DEBUG,"Free user_url");
+    sys_log(LOG_DEBUG, "user_url: %s", user_url);
+    /**sys_log(LOG_DEBUG,"Free user_url");*/
     if (user_url)
         free(user_url);
-    sys_log(LOG_DEBUG,"user_url freed");
+    /**sys_log(LOG_DEBUG,"user_url freed");*/
     // setting up conversation call prompting for one-time code
     pmsg[0] = &msg[0] ;
     msg[0].msg_style = PAM_PROMPT_ECHO_ON ;
+    /**sys_log(LOG_DEBUG,"setting prompt");*/
     const char prompt[15] = "Access token: ";
 /*
     char prompt[256] = "Access token [";
     strcat(prompt, host_endpoint);
     strcat(prompt, "]: ");        
 */
-    sys_log(LOG_DEBUG, "%s", prompt);
+    sys_log(LOG_DEBUG, "prompt: %s", prompt);
     msg[0].msg = prompt;
     
     resp = NULL ;
-    if ((retval = converse(pamh, 1, pmsg, &resp)) != PAM_SUCCESS)
-        // if this function fails, make sure that ChallengeResponseAuthentication in sshd_config is set to yes            
+    sys_log(LOG_DEBUG, "xxx - 0");
+    if ((retval = converse(pamh, 1, pmsg, &resp)) != PAM_SUCCESS){
+        sys_log(LOG_ERR, "xxx - 0.5");
+        // if this function fails, make sure that ChallengeResponseAuthentication in sshd_config is set to yes
+        sys_log(LOG_ERR, "Failed, please make sure that ChallengeResponseAuthentication in sshd_config is set to yes");
         goto error;
+    }
     // retrieving user input
+    sys_log(LOG_DEBUG, "xxx - 1");
     if (resp) {
+        sys_log(LOG_DEBUG, "xxx - 2");
+        sys_log(LOG_DEBUG, "got resp: %s", resp);
+        sys_log(LOG_DEBUG, "got resp: %s", resp->resp);
+        sys_log(LOG_DEBUG, "got resp: %s", resp[0].resp);
+        sys_log(LOG_DEBUG, "got resp: %d", resp[0].resp_retcode);
+        sys_log(LOG_DEBUG, "xxx - 3");
         if ((flags & PAM_DISALLOW_NULL_AUTHTOK) && resp[0].resp == NULL) {
+            sys_log(LOG_DEBUG, "xxx - 4");
+            sys_log(LOG_ERR, "but there was an error");
             free(resp);
+            sys_log(LOG_DEBUG, "xxx - 5");
             goto error;
         }
-        input = resp[0].resp;        
+        sys_log(LOG_DEBUG, "xxx - 6");
+        input = resp[0].resp;
         resp[0].resp = NULL; 
-        if (strstr(input, INCORRECT))
+        sys_log(LOG_DEBUG, "length of input: %d", sizeof(input));
+        for (i = 0; i <= 12; i++){
+            sys_log(LOG_DEBUG, "  %d:  input: %d - %c", i, input[i], input[i]);
+        }
+        sys_log(LOG_DEBUG, "xxx - 7");
+        /**sys_log(LOG_DEBUG, "trying to find %s in %s", input[4], INCORRECT);*/
+        /**sys_log(LOG_DEBUG, "trying to find %s in ", input);*/
+        /**sys_log(LOG_DEBUG, "trying to find    in %s", INCORRECT);*/
+        sys_log(LOG_DEBUG, "xxx - 7.5");
+        if (strstr(input, INCORRECT)) {
+            sys_log(LOG_DEBUG, "xxx - 8");
             goto error;
-    } else
+        }
+        sys_log(LOG_DEBUG, "xxx - 9");
+    } else {
+        sys_log(LOG_DEBUG, "xxx - 10");
         goto error;
+    }
+    sys_log(LOG_DEBUG, "xxx - 11");
     sys_log(LOG_DEBUG, "Token provided");
 
     // authenticate with token (input)
     long http_code = http_auth(input, host_endpoint, &response, &error);    
+    sys_log(LOG_DEBUG, "xxx - 11");
 
     // Check HTTP auth code
     if (http_code < 200 || http_code >= 300) {
@@ -319,6 +413,7 @@ PAM_EXTERN int pam_sm_authenticate( pam_handle_t *pamh, int flags, int argc, con
     } else {        
         struct userinfo my_info;
            // Call object parsing function
+    sys_log(LOG_DEBUG, "xxx - 10");
         
     if (json_userinfo_read(response, &my_info) == 0) {
             sys_log(LOG_DEBUG,"Username from OpenID provider: %s", my_info.name);
